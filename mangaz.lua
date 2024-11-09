@@ -83,6 +83,7 @@ find_item = function(url)
   local type_ = nil
   for pattern, name in pairs({
     ["^https?://www%.mangaz%.com/book/detail/([0-9]+)$"]="book",
+    ["^https?://www%.mangaz%.com/series/detail/([0-9]+)$"]="series",
     ["^https?://www%.mangaz%.com/author/detail/([0-9]+)$"]="author",
     ["^https?://www%.mangaz%.com/title/index%?(.+)$"]="index",
   }) do
@@ -157,6 +158,11 @@ allowed = function(url, parenturl)
   if not string.match(url, "^https?://[^/]*mangaz%.com/")
     and not string.match(url, "^https?://[^/]*j%-comi%.jp/") then
     discover_item(discovered_outlinks, string.match(percent_encode_url(url), "^([^%s]+)"))
+    return false
+  end
+
+  if item_type == "series"
+    and not string.match(url, "/series/") then
     return false
   end
 
@@ -386,8 +392,13 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     if string.match(html, "^%s+{.+}") then
       json = cjson.decode(html)
     end
+    if string.match(url, "^https?://r18%.mangaz%.com/.")
+      and not string.match(url, "/ajax/like_count/") then
+      check("https://www.mangaz.com/" .. string.match(url, "^https?://[^/]+/(.+)$"))
+    end
     if string.match(url, "/book/detail/") then
       check(urlparse.absolute(url, "/ajax/like_count/" .. item_value .. "/"))
+      check(urlparse.absolute(url, "/book/fin/" .. item_value))
     elseif string.match(url, "/virgo/view/") then
       local encoded_json = string.match(html, '<span%s+id="doc">([^<]+)<')
       local json = cjson.decode(base64.decode(encoded_json))
@@ -442,7 +453,11 @@ wget.callbacks.write_to_warc = function(url, http_stat)
   is_initial_url = false
   is_new_design = false
   if http_stat["statcode"] ~= 302 then
-    if http_stat["statcode"] ~= 200 then
+    if http_stat["statcode"] ~= 200
+      and not (
+        http_stat["statcode"] == 404
+        and string.match(url["url"], "^https?://r18.mangaz.com/apps/deeplink/")
+      )  then
       retry_url = true
       return false
     end
@@ -534,10 +549,15 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
 
   if status_code >= 300 and status_code <= 399 then
     local newloc = urlparse.absolute(url["url"], http_stat["newloc"])
+    io.stdout:write(" -> " .. newloc)
     if processed(newloc) or not allowed(newloc, url["url"]) then
       tries = 0
+      io.stdout:write(", skipping\n")
+      io.stdout:flush()
       return wget.actions.EXIT
     end
+    io.stdout:write("\n")
+    io.stdout:flush()
   end
 
   tries = 0

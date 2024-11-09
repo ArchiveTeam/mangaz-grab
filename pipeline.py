@@ -77,7 +77,7 @@ if not WGET_AT:
 #
 # Update this each time you make a non-cosmetic change.
 # It will be added to the WARC files and reported to the tracker.
-VERSION = '20241109.01'
+VERSION = '20241109.02'
 USER_AGENT = 'Mozilla/5.0 (X11; Linux i686; rv:124.0) Gecko/20100101 Firefox/124.0'
 TRACKER_ID = 'mangaz'
 TRACKER_HOST = 'legacy-api.arpa.li'
@@ -312,6 +312,9 @@ class WgetArgs(object):
             if item_type == 'book':
                 wget_args.extend(['--warc-header', 'mangaz-book: '+item_value])
                 wget_args.append('https://www.mangaz.com/book/detail/'+item_value)
+            elif item_type == 'series':
+                wget_args.extend(['--warc-header', 'mangaz-series: '+item_value])
+                wget_args.append('https://www.mangaz.com/series/detail/'+item_value)
             #elif item_type == 'author':
             #    wget_args.extend(['--warc-header', 'mangaz-author: '+item_value])
             #    wget_args.append('https://www.mangaz.com/authors/detail/'+item_value)
