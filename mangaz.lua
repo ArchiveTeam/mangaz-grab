@@ -259,18 +259,17 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     if not processed(url_)
       and not processed(url_ .. "/")
       and allowed(url_, origurl) then
-      if string.match(url_, "/ajax/like_count/") then
-        table.insert(urls, {
-          url=url_,
-          headers={
-            ["X-Requested-With"]="XMLHttpRequest"
-          }
-        })
-      else
-        table.insert(urls, {
-          url=url_
-        })
+      local headers = {}
+      if string.match(url_, "^https?://r18%.mangaz%.com/") then
+        headers["Cookie"] = "MANGAZ[age]=Q2FrZQ%3D%3D.To0%3D"
       end
+      if string.match(url_, "/ajax/like_count/") then
+        headers["X-Requested-With"] = "XMLHttpRequest"
+      end
+      table.insert(urls, {
+        url=url_,
+        headers=headers
+      })
       addedtolist[url_] = true
       addedtolist[url] = true
     end
@@ -388,7 +387,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
       json = cjson.decode(html)
     end
     if string.match(url, "/book/detail/") then
-      check("https://www.mangaz.com/ajax/like_count/" .. item_value .. "/")
+      check(urlparse.absolute(url, "/ajax/like_count/" .. item_value .. "/"))
     elseif string.match(url, "/virgo/view/") then
       local encoded_json = string.match(html, '<span%s+id="doc">([^<]+)<')
       local json = cjson.decode(base64.decode(encoded_json))
@@ -535,9 +534,6 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
 
   if status_code >= 300 and status_code <= 399 then
     local newloc = urlparse.absolute(url["url"], http_stat["newloc"])
-    if string.match(newloc, "^https?://r18%.mangaz%.com/") then
-      return wget.actions.ABORT
-    end
     if processed(newloc) or not allowed(newloc, url["url"]) then
       tries = 0
       return wget.actions.EXIT

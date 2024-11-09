@@ -77,7 +77,7 @@ if not WGET_AT:
 #
 # Update this each time you make a non-cosmetic change.
 # It will be added to the WARC files and reported to the tracker.
-VERSION = '20241108.01'
+VERSION = '20241109.01'
 USER_AGENT = 'Mozilla/5.0 (X11; Linux i686; rv:124.0) Gecko/20100101 Firefox/124.0'
 TRACKER_ID = 'mangaz'
 TRACKER_HOST = 'legacy-api.arpa.li'
@@ -285,7 +285,8 @@ class WgetArgs(object):
             '--warc-header', 'x-wget-at-project-name: ' + TRACKER_ID,
             '--warc-dedup-url-agnostic',
             '--warc-compression-use-zstd',
-            '--warc-zstd-dict-no-include'
+            '--warc-zstd-dict-no-include',
+            '--header', 'Cookie: MANGAZ[age]=Q2FrZQ%3D%3D.To0%3D'
         ]
         dict_data = ZstdDict.get_dict()
         with open(os.path.join(item['item_dir'], 'zstdict'), 'wb') as f:
