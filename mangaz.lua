@@ -84,8 +84,8 @@ find_item = function(url)
   for pattern, name in pairs({
     ["^https?://www%.mangaz%.com/book/detail/([0-9]+)$"]="book",
     ["^https?://www%.mangaz%.com/series/detail/([0-9]+)$"]="series",
-    ["^https?://www%.mangaz%.com/author/detail/([0-9]+)$"]="author",
-    ["^https?://www%.mangaz%.com/title/index%?(.+)$"]="index",
+    ["^https?://www%.mangaz%.com/authors/detail/([0-9]+)$"]="author",
+    ["^https?://r18%.mangaz%.com/title/index%?(.+)$"]="index",
   }) do
     value = string.match(url, pattern)
     type_ = name
@@ -138,9 +138,29 @@ allowed = function(url, parenturl)
     return true
   end
 
+  if item_type == "index"
+    and (
+      string.match(url, "/title/index%?")
+      or string.match(url, "/title/addpage_renewal%?")
+    ) then
+    for k, v in string.gmatch(item_value, "([^&%?]+)=([^&%?]+)") do
+      local found = false
+      for k2, v2 in string.gmatch(url, "([^&%?]+)=([^&%?]+)") do
+        if k == k2 and v == v2 then
+          found = true
+          break
+        end
+      end
+      if not found then
+        return false
+      end
+    end
+    return true
+  end
+
   local skip = false
   for pattern, type_ in pairs({
-    ["^https?://www%.mangaz%.com/title/index%?(.+)$"]="index",
+    ["/title/index%?(.+)$"]="index",
   }) do
     match = string.match(url, pattern)
     if match then
@@ -158,6 +178,11 @@ allowed = function(url, parenturl)
   if not string.match(url, "^https?://[^/]*mangaz%.com/")
     and not string.match(url, "^https?://[^/]*j%-comi%.jp/") then
     discover_item(discovered_outlinks, string.match(percent_encode_url(url), "^([^%s]+)"))
+    return false
+  end
+
+  if string.match(url, "^https?://[^/]+/series/detail/")
+    and item_type ~= "series" then
     return false
   end
 
@@ -224,7 +249,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
   local html = nil
   local json = nil
   local body_data = nil
-  
+
   downloaded[url] = true
 
   if abortgrab then
@@ -269,7 +294,8 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
       if string.match(url_, "^https?://r18%.mangaz%.com/") then
         headers["Cookie"] = "MANGAZ[age]=Q2FrZQ%3D%3D.To0%3D"
       end
-      if string.match(url_, "/ajax/like_count/") then
+      if string.match(url_, "/ajax/like_count/")
+        or string.match(url_, "/title/addpage_renewal%?") then
         headers["X-Requested-With"] = "XMLHttpRequest"
       end
       table.insert(urls, {
@@ -366,7 +392,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
       value = value + step
       return set_new_params(newurl, {[param]=tostring(value)})
     else
-      return set_new_params(newurl, {[param]=default})
+      return set_new_params(newurl, {[param]=tostring(default)})
     end
   end
 
@@ -399,6 +425,36 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     if string.match(url, "/book/detail/") then
       check(urlparse.absolute(url, "/ajax/like_count/" .. item_value .. "/"))
       check(urlparse.absolute(url, "/book/fin/" .. item_value))
+    elseif string.match(url, "/title/addpage_renewal%?") then
+      if string.len(string.match(html, "([^%s]*)")) > 0 then
+        check(increment_param(url, "page", "1", 1))
+      end
+    elseif string.match(url, "/title/index%?") then
+      if not string.match(url, "&sort=")
+        and not string.match(url, "&search=") then
+        check(url .. "&sort=popular&search=input")
+        check(url .. "&sort=new&search=input")
+      end
+      local query_string = string.match(url, "(%?.+)$")
+      local renewal_page = urlparse.absolute(url, "/title/addpage_renewal" .. query_string)
+      for k, v in pairs({
+        ["type"]="",
+        ["search"]="",
+        ["sort"]="popular"
+      }) do
+        if not string.match(renewal_page, "[%?&]" .. k .. "=") then
+          renewal_page = renewal_page .. "&" .. k .. "=" .. v
+        end
+      end
+      renewal_page = renewal_page .. "&page=1"
+      check(renewal_page)
+      local path = string.match(url, "(/title/index%?.+)$")
+      check("https://www.mangaz.com" .. path)
+      check("https://r18.mangaz.com" .. path)
+      check("https://www.mangaz.com/mens" .. path)
+      check("https://www.mangaz.com/womens" .. path)
+      check("https://www.mangaz.com/bl" .. path)
+      check("https://www.mangaz.com/tl" .. path)
     elseif string.match(url, "/virgo/view/") then
       local encoded_json = string.match(html, '<span%s+id="doc">([^<]+)<')
       local json = cjson.decode(base64.decode(encoded_json))
@@ -442,7 +498,9 @@ end
 
 wget.callbacks.write_to_warc = function(url, http_stat)
   status_code = http_stat["statcode"]
-  set_item(url["url"])
+  if not allowed(url["url"]) then
+    set_item(url["url"])
+  end
   url_count = url_count + 1
   io.stdout:write(url_count .. "=" .. status_code .. " " .. url["url"] .. " \n")
   io.stdout:flush()
@@ -454,20 +512,19 @@ wget.callbacks.write_to_warc = function(url, http_stat)
   is_new_design = false
   if http_stat["statcode"] ~= 302 then
     if http_stat["statcode"] ~= 200
-      and not (
-        http_stat["statcode"] == 404
-        and string.match(url["url"], "^https?://r18.mangaz.com/apps/deeplink/")
-      )  then
+      and http_stat["statcode"] ~= 404  then
       retry_url = true
       return false
     end
-    if http_stat["len"] == 0 then
+    if http_stat["len"] == 0
+      and not string.match(url["url"], "/title/addpage_renewal%?") then
       retry_url = true
       return false
     end
     if string.match(url["url"], "^https?://[^/]*mangaz%.com/.") then
       local html = read_file(http_stat["local_file"])
-      if string.len(string.match(html, "%s*(.)")) == 0 then
+      if not string.match(url["url"], "/title/addpage_renewal%?")
+        and string.len(string.match(html, "%s*(.)")) == 0 then
         retry_url = true
         return false
       end
@@ -487,7 +544,7 @@ end
 
 wget.callbacks.httploop_result = function(url, err, http_stat)
   status_code = http_stat["statcode"]
-  
+
   if not logged_response then
     url_count = url_count + 1
     io.stdout:write(url_count .. "=" .. status_code .. " " .. url["url"] .. " \n")
@@ -499,11 +556,13 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
     return wget.actions.ABORT
   end
 
-  set_item(url["url"])
+  if not allowed(url["url"]) then
+    set_item(url["url"])
+  end
   if not item_name then
     error("No item name found.")
   end
-  
+
   if is_new_design then
     return wget.actions.EXIT
   end
@@ -518,9 +577,6 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
     io.stdout:flush()
     tries = tries + 1
     local maxtries = 5
-    if status_code == 404 then
-      maxtries = 0
-    end
     if tries > maxtries then
       io.stdout:write(" Skipping.\n")
       io.stdout:flush()
@@ -549,15 +605,15 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
 
   if status_code >= 300 and status_code <= 399 then
     local newloc = urlparse.absolute(url["url"], http_stat["newloc"])
-    io.stdout:write(" -> " .. newloc)
+    --io.stdout:write(" -> " .. newloc)
     if processed(newloc) or not allowed(newloc, url["url"]) then
       tries = 0
-      io.stdout:write(", skipping\n")
-      io.stdout:flush()
+      --[[io.stdout:write(", skipping\n")
+      io.stdout:flush()]]
       return wget.actions.EXIT
     end
-    io.stdout:write("\n")
-    io.stdout:flush()
+    --[[io.stdout:write("\n")
+    io.stdout:flush()]]
   end
 
   tries = 0

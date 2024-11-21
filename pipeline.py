@@ -77,7 +77,7 @@ if not WGET_AT:
 #
 # Update this each time you make a non-cosmetic change.
 # It will be added to the WARC files and reported to the tracker.
-VERSION = '20241119.01'
+VERSION = '20241121.01'
 USER_AGENT = 'Mozilla/5.0 (X11; Linux i686; rv:124.0) Gecko/20100101 Firefox/124.0'
 TRACKER_ID = 'mangaz'
 TRACKER_HOST = 'legacy-api.arpa.li'
@@ -315,12 +315,15 @@ class WgetArgs(object):
             elif item_type == 'series':
                 wget_args.extend(['--warc-header', 'mangaz-series: '+item_value])
                 wget_args.append('https://www.mangaz.com/series/detail/'+item_value)
-            #elif item_type == 'author':
-            #    wget_args.extend(['--warc-header', 'mangaz-author: '+item_value])
-            #    wget_args.append('https://www.mangaz.com/authors/detail/'+item_value)
-            #elif item_type == 'index':
-            #    wget_args.extend(['--warc-header', 'mangaz-index-params: '+item_value])
-            #    wget_args.append('https://r18.mangaz.com/title/index?'+item_value)
+            elif item_type == 'author':
+                wget_args.extend(['--warc-header', 'mangaz-author: '+item_value])
+                wget_args.append('https://www.mangaz.com/authors/detail/'+item_value)
+            elif item_type == 'index':
+                wget_args.extend(['--warc-header', 'mangaz-index-params: '+item_value])
+                wget_args.append('https://r18.mangaz.com/title/index?'+item_value)
+            elif item_type == 'info':
+                wget_args.extend(['--warc-header', 'mangaz-info: '+item_value])
+                wget_args.append('https://closing.mangaz.com/info/{}/index.html'.format(item_value))
             else:
                 raise Exception('Unknown item')
 
