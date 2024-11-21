@@ -84,7 +84,7 @@ find_item = function(url)
   for pattern, name in pairs({
     ["^https?://www%.mangaz%.com/book/detail/([0-9]+)$"]="book",
     ["^https?://www%.mangaz%.com/series/detail/([0-9]+)$"]="series",
-    ["^https?://www%.mangaz%.com/authors/detail/([0-9]+)$"]="author",
+    ["^https?://r18%.mangaz%.com/authors/detail/([0-9]+)$"]="author",
     ["^https?://r18%.mangaz%.com/title/index%?(.+)$"]="index",
   }) do
     value = string.match(url, pattern)
